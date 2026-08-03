@@ -81,7 +81,7 @@
 <body class="bg-light">
     <div class="container-fluid vh-100 py-3">
         <div class="row h-100">
-            <!-- Chat history sidebar -->
+            <!-- Multi-chat history sidebar (commented out: spec only calls for a single chat interface)
             <div class="col-3 d-flex flex-column h-100 border-end">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="mb-0">Chats</h5>
@@ -89,9 +89,10 @@
                 </div>
                 <div id="history-list" class="list-group flex-grow-1"></div>
             </div>
+            -->
 
             <!-- Main chat interface -->
-            <div class="col-9 d-flex flex-column h-100">
+            <div class="col-12 d-flex flex-column h-100">
                 <div id="chat-window" class="flex-grow-1 bg-white rounded border p-3 mb-3 d-flex flex-column">
                 </div>
                 <div class="input-group">
@@ -104,9 +105,10 @@
 
     <script>
         const chatWindow = document.getElementById("chat-window");
-        const historyList = document.getElementById("history-list");
         const input = document.getElementById("input");
 
+        /* Multi-chat support (commented out: spec only calls for a single chat interface)
+        const historyList = document.getElementById("history-list");
         let currentChatId = null;
 
         async function loadChats() {
@@ -143,6 +145,7 @@
             const chat = await res.json();
             await switchChat(chat.id);
         }
+        */
 
         function formatTime(epochSeconds) {
             return new Date(epochSeconds * 1000).toLocaleString([], {
@@ -156,11 +159,7 @@
         }
 
         async function loadMessages() {
-            if (currentChatId === null) {
-                chatWindow.innerHTML = "";
-                return;
-            }
-            const res = await fetch(`/chats/${currentChatId}/messages`);
+            const res = await fetch("/chat/messages");
             const data = await res.json();
             const entries = Object.entries(data).sort((a, b) => Number(a[0]) - Number(b[0]));
 
@@ -216,18 +215,12 @@
             if (sendBtn.disabled) return;
             sendBtn.disabled = true;
 
-            if (currentChatId === null) {
-                const res = await fetch("/chats", { method: "POST" });
-                const chat = await res.json();
-                currentChatId = chat.id;
-            }
-
             const userBubble = appendBubble("user", text);
             input.value = "";
             let typingIndicator = appendTypingIndicator();
 
             try {
-                const res = await fetch(`/chats/${currentChatId}/messages`, {
+                const res = await fetch("/chat", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ text: text })
@@ -290,12 +283,9 @@
                 }
                 sendBtn.disabled = false;
             }
-
-            await loadChats();
         }
 
         document.getElementById("send-btn").addEventListener("click", sendMessage);
-        document.getElementById("new-chat-btn").addEventListener("click", createChat);
         input.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -303,7 +293,7 @@
             }
         });
 
-        loadChats();
+        loadMessages();
     </script>
 </body>
 </html>

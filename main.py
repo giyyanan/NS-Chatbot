@@ -1,10 +1,12 @@
 import itertools
+import json
 import os
+import time
 
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from ollama import Client, RequestError, ResponseError
 from pydantic import BaseModel
 
@@ -29,7 +31,7 @@ class Message(BaseModel):
 @app.post("/chats")
 async def create_chat():
     chat_id = next(chat_id_counter)
-    chats[chat_id] = {"title": "New Chat", "messages": []}
+    chats[chat_id] = {"title": "New Chat", "messages": {}}
     return {"id": chat_id, "title": chats[chat_id]["title"]}
 
 @app.get("/chats")
@@ -51,36 +53,52 @@ async def add_message(chat_id: int, msg: Message):
     if not chat["messages"]:
         chat["title"] = msg.text[:30]
 
-    chat["messages"].append({"role": "user", "text": msg.text})
+    user_timestamp = time.time()
+    chat["messages"][user_timestamp] = {"role": "user", "text": msg.text}
 
-    role = "assistant"
-    try:
-        response = ollama_client.chat(
-            model=OLLAMA_MODEL,
-            messages=[
-                {"role": m["role"], "content": m["text"]}
-                for m in chat["messages"]
-                if m["role"] != "error"
-            ],
-        )
-        reply = response.message.content
-    except ResponseError as exc:
-        role = "error"
-        if exc.status_code == 401:
-            reply = "Ollama rejected the request: invalid or missing API key. Check OLLAMA_API_KEY in .env."
-        elif exc.status_code == 404:
-            reply = f"Model '{OLLAMA_MODEL}' was not found on your Ollama Cloud account."
-        else:
-            reply = f"Ollama returned an error ({exc.status_code}): {exc.error}"
-    except (RequestError, httpx.ConnectError, httpx.TimeoutException):
-        role = "error"
-        reply = f"Could not reach Ollama at {OLLAMA_HOST}. Is the host reachable?"
-    except Exception as exc:
-        role = "error"
-        reply = f"Unexpected error while contacting Ollama: {exc}"
+    def stream_reply():
+        yield json.dumps({"type": "user_timestamp", "timestamp": user_timestamp}) + "\n"
 
-    chat["messages"].append({"role": role, "text": reply})
-    return chat["messages"]
+        role = "assistant"
+        full_text = ""
+        try:
+            stream = ollama_client.chat(
+                model=OLLAMA_MODEL,
+                messages=[
+                    {"role": m["role"], "content": m["text"]}
+                    for m in chat["messages"].values()
+                    if m["role"] != "error"
+                ],
+                stream=True,
+            )
+            for part in stream:
+                delta = part.message.content
+                if delta:
+                    full_text += delta
+                    yield json.dumps({"type": "chunk", "role": role, "text": delta}) + "\n"
+        except ResponseError as exc:
+            role = "error"
+            if exc.status_code == 401:
+                full_text = "Ollama rejected the request: invalid or missing API key. Check OLLAMA_API_KEY in .env."
+            elif exc.status_code == 404:
+                full_text = f"Model '{OLLAMA_MODEL}' was not found on your Ollama Cloud account."
+            else:
+                full_text = f"Ollama returned an error ({exc.status_code}): {exc.error}"
+            yield json.dumps({"type": "chunk", "role": role, "text": full_text}) + "\n"
+        except (RequestError, httpx.ConnectError, httpx.TimeoutException):
+            role = "error"
+            full_text = f"Could not reach Ollama at {OLLAMA_HOST}. Is the host reachable?"
+            yield json.dumps({"type": "chunk", "role": role, "text": full_text}) + "\n"
+        except Exception as exc:
+            role = "error"
+            full_text = f"Unexpected error while contacting Ollama: {exc}"
+            yield json.dumps({"type": "chunk", "role": role, "text": full_text}) + "\n"
+
+        reply_timestamp = time.time()
+        chat["messages"][reply_timestamp] = {"role": role, "text": full_text}
+        yield json.dumps({"type": "done", "role": role, "timestamp": reply_timestamp}) + "\n"
+
+    return StreamingResponse(stream_reply(), media_type="application/x-ndjson")
 
 @app.get("/")
 async def index():

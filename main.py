@@ -1,62 +1,46 @@
-import time
+import itertools
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 app = FastAPI()
 
-messages = {}
+chats = {}
+chat_id_counter = itertools.count(1)
 
 class Message(BaseModel):
     text: str
 
-@app.post("/messages")
-async def add_message(msg: Message):
-    timestamp = time.time()
-    messages[timestamp] = msg.text
-    return {"timestamp": timestamp, "text": msg.text}
+@app.post("/chats")
+async def create_chat():
+    chat_id = next(chat_id_counter)
+    chats[chat_id] = {"title": "New Chat", "messages": []}
+    return {"id": chat_id, "title": chats[chat_id]["title"]}
 
-@app.get("/messages")
-async def get_messages():
-    return messages
+@app.get("/chats")
+async def list_chats():
+    return [{"id": chat_id, "title": chat["title"]} for chat_id, chat in chats.items()]
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/chats/{chat_id}/messages")
+async def get_messages(chat_id: int):
+    if chat_id not in chats:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return chats[chat_id]["messages"]
+
+@app.post("/chats/{chat_id}/messages")
+async def add_message(chat_id: int, msg: Message):
+    if chat_id not in chats:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    chat = chats[chat_id]
+    if not chat["messages"]:
+        chat["title"] = msg.text[:30]
+
+    chat["messages"].append({"role": "user", "text": msg.text})
+    chat["messages"].append({"role": "assistant", "text": "This is a placeholder response."})
+    return chat["messages"]
+
+@app.get("/")
 async def index():
-    return """
-    <html>
-    <head><title>Chat</title></head>
-    <body>
-        <div id="chat" style="margin-bottom:10px;"></div>
-        <input id="input" type="text" placeholder="Type a message">
-        <button onclick="send()">Send</button>
-
-        <script>
-            async function send() {
-                const input = document.getElementById("input");
-                const text = input.value;
-                if (!text) return;
-                await fetch("/messages", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({text: text})
-                });
-                input.value = "";
-                loadMessages();
-            }
-
-            async function loadMessages() {
-                const res = await fetch("/messages");
-                const data = await res.json();
-                const chat = document.getElementById("chat");
-                chat.innerHTML = Object.entries(data)
-                    .sort((a, b) => a[0] - b[0])
-                    .map(([ts, text]) => `<div>${text}</div>`)
-                    .join("");
-            }
-
-            loadMessages();
-        </script>
-    </body>
-    </html>
-    """
+    return FileResponse("index.html")

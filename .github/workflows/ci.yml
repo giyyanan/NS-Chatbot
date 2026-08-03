@@ -41,8 +41,11 @@ jobs:
 
       - name: Check DockerHub secrets are configured
         id: secrets_check
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+          if [ -n "$DH_USER" ] && [ -n "$DH_TOKEN" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -61,4 +64,4 @@ jobs:
 
       - name: Skip push (DockerHub secrets not configured)
         if: steps.secrets_check.outputs.configured != 'true'
-        run: echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set — built the image but skipped pushing. Add both secrets in Settings > Secrets and variables > Actions to enable pushing."
+        run: echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set — built the image but skipped pushing."

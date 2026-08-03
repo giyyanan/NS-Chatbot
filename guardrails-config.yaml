@@ -1,0 +1,14 @@
+input_guards:
+  pii_scanner:
+    enabled: true
+    patterns: ["ssn", "email", "phone", "credit_card", "api_key"]
+    action: redact # redact | block
+
+  injection_detector:
+    enabled: true
+    action: block
+
+output_guards:
+  pii_scanner:
+    enabled: false
+    action: redact

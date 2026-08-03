@@ -7,7 +7,7 @@ on:
     branches: [master]
 
 env:
-  IMAGE_NAME: giyyanan/ns-chatbot
+  IMAGE_NAME: giyyananv/ns-chatbot
 
 jobs:
   test:

@@ -6,3 +6,8 @@ TODO.md
 cenv/
 .claude/
 .pytest_cache/
+
+# Local-embeddings proof-of-concept, superseded by the real Dockerfile
+Dockerfile.embed-test
+docker-entrypoint-test.sh
+docker_embed_test.py

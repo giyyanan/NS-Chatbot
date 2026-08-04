@@ -20,13 +20,19 @@ load_dotenv()
 
 app = FastAPI()
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "https://ollama.com")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
+USING_CLOUD = bool(OLLAMA_API_KEY)
 
-ollama_client = Client(
-    host=OLLAMA_HOST,
-    headers={"Authorization": f"Bearer {os.getenv('OLLAMA_API_KEY')}"},
-)
+if USING_CLOUD:
+    OLLAMA_HOST = os.getenv("OLLAMA_HOST", "https://ollama.com")
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+    ollama_client = Client(host=OLLAMA_HOST, headers={"Authorization": f"Bearer {OLLAMA_API_KEY}"})
+else:
+    # No OLLAMA_API_KEY -> fall back to a local Ollama server for chat too
+    # (the Docker image already runs one locally for embeddings).
+    OLLAMA_HOST = "http://localhost:11434"
+    OLLAMA_MODEL = os.getenv("LOCAL_OLLAMA_MODEL", "llama3.2:3b")
+    ollama_client = Client(host=OLLAMA_HOST)
 
 # --- Multi-chat support (commented out: spec only calls for a single chat interface) ---
 # chats = {}
@@ -168,7 +174,13 @@ async def chat(msg: Message):
             if exc.status_code == 401:
                 full_text = "Ollama rejected the request: invalid or missing API key. Check OLLAMA_API_KEY in .env."
             elif exc.status_code == 404:
-                full_text = f"Model '{OLLAMA_MODEL}' was not found on your Ollama Cloud account."
+                if USING_CLOUD:
+                    full_text = f"Model '{OLLAMA_MODEL}' was not found on your Ollama Cloud account."
+                else:
+                    full_text = (
+                        f"Model '{OLLAMA_MODEL}' was not found on the local Ollama server. "
+                        "It should be pulled automatically on container start -- check the logs."
+                    )
             else:
                 full_text = f"Ollama returned an error ({exc.status_code}): {exc.error}"
             yield json.dumps({"type": "chunk", "role": role, "text": full_text}) + "\n"

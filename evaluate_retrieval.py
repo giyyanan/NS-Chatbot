@@ -1,10 +1,14 @@
 import json
+import os
+from datetime import datetime, timezone
 
 from sklearn.metrics import classification_report
 
-from faq_retrieval import retrieve_with_timing
+from faq_retrieval import RETRIEVAL_TOP_K, retrieve_with_timing
 
 EVAL_PATH = "eval_questions.json"
+RESULTS_DIR = "eval_results"
+REPORT_PATH = os.path.join(RESULTS_DIR, "retrieval_report.md")
 
 
 def predict_category(question: str):
@@ -19,6 +23,61 @@ def percentiles(values: list[float]):
     p50 = values[len(values) // 2]
     p95 = values[int(len(values) * 0.95)]
     return avg, p50, p95
+
+
+def render_report(y_true, y_pred, embed_latencies, search_latencies) -> str:
+    report_dict = classification_report(y_true, y_pred, zero_division=0, output_dict=True)
+    e_avg, e_p50, e_p95 = percentiles(embed_latencies)
+    s_avg, s_p50, s_p95 = percentiles(search_latencies)
+    total_avg = e_avg + s_avg
+    accuracy = sum(1 for t, p in zip(y_true, y_pred) if t == p) / len(y_true)
+
+    lines = []
+    lines.append("# FAQ Retrieval Evaluation Report")
+    lines.append("")
+    lines.append(f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')}")
+    lines.append(f"Questions evaluated: {len(y_true)}")
+    lines.append(f"top_k: {RETRIEVAL_TOP_K}  |  min_score: 0.55")
+    lines.append("")
+    lines.append(f"**Overall accuracy: {accuracy:.1%}**")
+    lines.append("")
+    lines.append("## Precision / Recall by category")
+    lines.append("")
+    lines.append("| Category | Precision | Recall | F1 | Support |")
+    lines.append("|---|---|---|---|---|")
+    for category, metrics in sorted(report_dict.items()):
+        if category in ("accuracy", "macro avg", "weighted avg"):
+            continue
+        lines.append(
+            f"| {category} | {metrics['precision']:.2f} | {metrics['recall']:.2f} "
+            f"| {metrics['f1-score']:.2f} | {int(metrics['support'])} |"
+        )
+    macro = report_dict["macro avg"]
+    weighted = report_dict["weighted avg"]
+    lines.append(
+        f"| **macro avg** | {macro['precision']:.2f} | {macro['recall']:.2f} "
+        f"| {macro['f1-score']:.2f} | {int(macro['support'])} |"
+    )
+    lines.append(
+        f"| **weighted avg** | {weighted['precision']:.2f} | {weighted['recall']:.2f} "
+        f"| {weighted['f1-score']:.2f} | {int(weighted['support'])} |"
+    )
+    lines.append("")
+    lines.append("## Latency breakdown")
+    lines.append("")
+    lines.append("| Stage | avg | p50 | p95 |")
+    lines.append("|---|---|---|---|")
+    lines.append(f"| Ollama embedding call | {e_avg * 1000:.1f}ms | {e_p50 * 1000:.1f}ms | {e_p95 * 1000:.1f}ms |")
+    lines.append(f"| Local cosine search | {s_avg * 1000:.2f}ms | {s_p50 * 1000:.2f}ms | {s_p95 * 1000:.2f}ms |")
+    lines.append(f"| **Total retrieval** | **{total_avg * 1000:.1f}ms** | — | — |")
+    lines.append("")
+    lines.append(
+        f"Embedding call is {e_avg / total_avg:.1%} of total latency; "
+        f"local search is {s_avg / total_avg:.1%}."
+    )
+    lines.append("")
+
+    return "\n".join(lines)
 
 
 def main():
@@ -40,21 +99,14 @@ def main():
         if (i + 1) % 100 == 0:
             print(f"  {i + 1}/{len(eval_set)} evaluated...")
 
-    print("\n" + "=" * 70)
-    print(f"Evaluated {len(eval_set)} questions\n")
-    print(classification_report(y_true, y_pred, zero_division=0))
+    report = render_report(y_true, y_pred, embed_latencies, search_latencies)
 
-    e_avg, e_p50, e_p95 = percentiles(embed_latencies)
-    s_avg, s_p50, s_p95 = percentiles(search_latencies)
-    total_avg = e_avg + s_avg
+    print("\n" + report)
 
-    print("Latency breakdown:")
-    print(f"  Ollama embedding call : avg={e_avg * 1000:.1f}ms  p50={e_p50 * 1000:.1f}ms  p95={e_p95 * 1000:.1f}ms")
-    print(f"  Local cosine search   : avg={s_avg * 1000:.2f}ms  p50={s_p50 * 1000:.2f}ms  p95={s_p95 * 1000:.2f}ms")
-    print(f"  Total retrieval       : avg={total_avg * 1000:.1f}ms  ({e_avg / total_avg:.1%} embedding / {s_avg / total_avg:.1%} search)")
-
-    accuracy = sum(1 for t, p in zip(y_true, y_pred) if t == p) / len(y_true)
-    print(f"\nOverall accuracy: {accuracy:.1%}")
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(f"\nSaved report to {REPORT_PATH}")
 
 
 if __name__ == "__main__":

@@ -4,10 +4,15 @@ import time
 
 import numpy as np
 import ollama
+from dotenv import load_dotenv
+
+load_dotenv()
 
 CSV_PATH = "BankFAQs.csv"
 CACHE_PATH = "faq_embeddings_embeddinggemma.npy"
 EMBEDDING_MODEL = "embeddinggemma"
+
+RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "10"))
 
 with open(CSV_PATH, newline="", encoding="utf-8") as f:
     faqs = list(csv.DictReader(f))
@@ -23,7 +28,7 @@ _matrix = np.load(CACHE_PATH)
 _normed_matrix = _matrix / np.linalg.norm(_matrix, axis=1, keepdims=True)
 
 
-def retrieve_with_timing(query: str, top_k: int = 3, min_score: float = 0.55):
+def retrieve_with_timing(query: str, top_k: int = RETRIEVAL_TOP_K, min_score: float = 0.55):
     """Same as retrieve(), but also returns a timing breakdown:
     {"embed_seconds": ..., "search_seconds": ...} — embed_seconds is the
     Ollama embedding API call, search_seconds is the local numpy cosine
@@ -57,6 +62,6 @@ def retrieve_with_timing(query: str, top_k: int = 3, min_score: float = 0.55):
     return results, {"embed_seconds": embed_seconds, "search_seconds": search_seconds}
 
 
-def retrieve(query: str, top_k: int = 3, min_score: float = 0.55):
+def retrieve(query: str, top_k: int = RETRIEVAL_TOP_K, min_score: float = 0.55):
     results, _ = retrieve_with_timing(query, top_k=top_k, min_score=min_score)
     return results

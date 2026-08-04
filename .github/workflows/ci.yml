@@ -7,7 +7,7 @@ on:
     branches: [master]
 
 env:
-  IMAGE_NAME: giyyananv/ns-chatbot
+  IMAGE_REPO: ns-chatbot
 
 jobs:
   test:
@@ -35,8 +35,8 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            -t ${{ env.IMAGE_NAME }}:latest \
+            -t ${{ env.IMAGE_REPO }}:${{ github.sha }} \
+            -t ${{ env.IMAGE_REPO }}:latest \
             .
 
       - name: Check DockerHub secrets are configured
@@ -58,9 +58,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push Docker image
+      - name: Tag and push Docker image
         if: steps.secrets_check.outputs.configured == 'true'
-        run: docker push ${{ env.IMAGE_NAME }} --all-tags
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          docker tag ${{ env.IMAGE_REPO }}:${{ github.sha }} "$DH_USER/${{ env.IMAGE_REPO }}:${{ github.sha }}"
+          docker tag ${{ env.IMAGE_REPO }}:latest "$DH_USER/${{ env.IMAGE_REPO }}:latest"
+          docker push "$DH_USER/${{ env.IMAGE_REPO }}" --all-tags
 
       - name: Skip push (DockerHub secrets not configured)
         if: steps.secrets_check.outputs.configured != 'true'

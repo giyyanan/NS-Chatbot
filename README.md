@@ -143,7 +143,7 @@ average retrieval latency (94% of which is the embedding API call itself,
 ## CI/CD
 
 `.github/workflows/ci.yml` runs the test suite on every push/PR to `master`,
-then builds and pushes a Docker image to `giyyanan/ns-chatbot` on pushes to
+then builds and pushes a Docker image to `<DOCKERHUB_USERNAME>/ns-chatbot` on pushes to
 `master` — requires `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets configured
 on the repo; the push step skips gracefully if they're absent.
 

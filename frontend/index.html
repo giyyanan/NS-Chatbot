@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>FAQ chatbot</title>
+    <!-- Adding Bootstrap library for a responsive layout -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        html, body { height: 100%; font-family: "Roboto Condensed", sans-serif; }
+        #history-list { overflow-y: auto; min-height: 0; }
+        #chat-window { overflow-y: auto; min-height: 0; }
+        .message-group {
+            display: flex;
+            flex-direction: column;
+            max-width: 75%;
+            margin-bottom: 0.75rem;
+        }
+        .message-group.user {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+        .message-group.assistant, .message-group.error {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+        .chat-bubble {
+            padding: 0.5rem 0.9rem;
+            border-radius: 1rem;
+        }
+        .bubble-text {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .bubble-text.markdown-content {
+            white-space: normal;
+        }
+        .bubble-text.markdown-content p {
+            margin: 0 0 0.5rem 0;
+        }
+        .bubble-text.markdown-content p:last-child {
+            margin-bottom: 0;
+        }
+        .bubble-text.markdown-content ul {
+            margin: 0 0 0.5rem 0;
+            padding-left: 1.25rem;
+        }
+        .bubble-text.markdown-content ul:last-child {
+            margin-bottom: 0;
+        }
+        .chat-bubble.user {
+            background-color: #0d6efd;
+            color: #fff;
+        }
+        .chat-bubble.assistant {
+            background-color: #d1e7dd;
+            color: #0f5132;
+            border: 1px solid #a3cfbb;
+        }
+        .chat-bubble.error {
+            background-color: #f8d7da;
+            color: #842029;
+            border: 1px solid #f5c2c7;
+        }
+        .list-group-item.active-chat {
+            background-color: #0d6efd;
+            color: #fff;
+        }
+        .time-pill {
+            background-color: #6c757d;
+            color: #fff;
+            font-size: 0.65rem;
+            padding: 0.15rem 0.6rem;
+            border-radius: 999px;
+            margin-top: 0.3rem;
+        }
+        .typing-indicator {
+            display: flex;
+            gap: 0.25rem;
+            align-items: center;
+            align-self: flex-start;
+        }
+        .typing-indicator span {
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 50%;
+            background-color: #6c757d;
+            animation: typing-bounce 1.2s infinite ease-in-out;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing-bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-0.25rem); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container vh-100 py-3">
+       
+        <div class="row h-100">
+            <!-- Multi-chat history sidebar (commented out: spec only calls for a single chat interface)
+            <div class="col-3 d-flex flex-column h-100 border-end">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Chats</h5>
+                    <button id="new-chat-btn" class="btn btn-sm btn-primary">New Chat</button>
+                </div>
+                <div id="history-list" class="list-group flex-grow-1"></div>
+            </div>
+            -->
+
+            <!-- Main chat interface -->
+
+            <div class="col-12 d-flex flex-column h-100">
+                <header class="chat-header">
+                    <p>FAQ chat assistant</p>
+                </header>
+                <div id="chat-window" class="flex-grow-1 bg-white rounded border p-3 mb-3 d-flex flex-column">
+                </div>
+                <div class="input-group">
+                    <textarea id="input" class="form-control" rows="2" placeholder="Type a message..."></textarea>
+                    <button id="send-btn" class="btn btn-primary">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatWindow = document.getElementById("chat-window");
+        const input = document.getElementById("input");
+
+        /* Multi-chat support (commented out: spec only calls for a single chat interface)
+        const historyList = document.getElementById("history-list");
+        let currentChatId = null;
+
+        async function loadChats() {
+            const res = await fetch("/chats");
+            const chats = await res.json();
+
+            historyList.innerHTML = chats
+                .map(c => `
+                    <a href="#" data-id="${c.id}"
+                       class="list-group-item list-group-item-action text-truncate ${c.id === currentChatId ? "active-chat" : ""}">
+                        ${c.title}
+                    </a>
+                `)
+                .join("");
+
+            historyList.querySelectorAll("a").forEach(a => {
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    switchChat(Number(a.dataset.id));
+                });
+            });
+
+            return chats;
+        }
+
+        async function switchChat(chatId) {
+            currentChatId = chatId;
+            await loadChats();
+            await loadMessages();
+        }
+
+        async function createChat() {
+            const res = await fetch("/chats", { method: "POST" });
+            const chat = await res.json();
+            await switchChat(chat.id);
+        }
+        */
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        // Minimal, self-contained markdown -> HTML: bold and bullet lists only,
+        // since that's all the assistant's FAQ-answering style prompt produces.
+        // Escaping first and only ever emitting our own <strong>/<ul>/<li>/<p>
+        // tags keeps this safe even though the text is LLM-generated.
+        function renderMarkdown(rawText) {
+            const escaped = escapeHtml(rawText).replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+
+            const blocks = [];
+            let listItems = null;
+            let paraLines = [];
+
+            const flushPara = () => {
+                if (paraLines.length) {
+                    blocks.push(`<p>${paraLines.join("<br>")}</p>`);
+                    paraLines = [];
+                }
+            };
+            const flushList = () => {
+                if (listItems) {
+                    blocks.push(`<ul>${listItems.map(item => `<li>${item}</li>`).join("")}</ul>`);
+                    listItems = null;
+                }
+            };
+
+            for (const line of escaped.split("\n")) {
+                const trimmed = line.trim();
+                const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
+                if (bulletMatch) {
+                    flushPara();
+                    (listItems ??= []).push(bulletMatch[1]);
+                } else if (trimmed === "") {
+                    flushList();
+                    flushPara();
+                } else {
+                    flushList();
+                    paraLines.push(trimmed);
+                }
+            }
+            flushList();
+            flushPara();
+
+            return blocks.join("");
+        }
+
+        function formatTime(epochSeconds) {
+            return new Date(epochSeconds * 1000).toLocaleString([], {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit"
+            });
+        }
+
+        async function loadMessages() {
+            const res = await fetch("/chat/messages");
+            const data = await res.json();
+            const entries = Object.entries(data).sort((a, b) => Number(a[0]) - Number(b[0]));
+
+            chatWindow.innerHTML = "";
+            for (const [ts, m] of entries) {
+                appendBubble(m.role, m.text, Number(ts));
+            }
+        }
+
+        function appendBubble(role, text, timestamp) {
+            const group = document.createElement("div");
+            group.className = `message-group ${role}`;
+
+            const bubble = document.createElement("div");
+            bubble.className = `chat-bubble ${role}`;
+            const textDiv = document.createElement("div");
+            textDiv.className = "bubble-text";
+            textDiv.dataset.raw = text;
+            if (role === "assistant") {
+                textDiv.classList.add("markdown-content");
+                textDiv.innerHTML = renderMarkdown(text);
+            } else {
+                textDiv.textContent = text;
+            }
+            bubble.appendChild(textDiv);
+            group.appendChild(bubble);
+
+            const pill = document.createElement("div");
+            pill.className = "time-pill";
+            pill.textContent = timestamp ? formatTime(timestamp) : "";
+            group.appendChild(pill);
+
+            chatWindow.appendChild(group);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return group;
+        }
+
+        function appendTypingIndicator() {
+            const div = document.createElement("div");
+            div.className = "chat-bubble assistant typing-indicator";
+            div.innerHTML = "<span></span><span></span><span></span>";
+            chatWindow.appendChild(div);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return div;
+        }
+
+        async function sendMessage() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            const sendBtn = document.getElementById("send-btn");
+            if (sendBtn.disabled) return;
+            sendBtn.disabled = true;
+
+            const userBubble = appendBubble("user", text);
+            input.value = "";
+            let typingIndicator = appendTypingIndicator();
+
+            try {
+                const res = await fetch("/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text: text })
+                });
+
+                if (!res.ok) {
+                    let detail = res.statusText;
+                    try {
+                        const errBody = await res.json();
+                        detail = errBody.detail || detail;
+                    } catch (_) {}
+                    throw new Error(`Request failed (${res.status}): ${detail}`);
+                }
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let activeBubble = null;
+                let activeRole = null;
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        const event = JSON.parse(line);
+
+                        if (event.type === "user_timestamp") {
+                            userBubble.querySelector(".time-pill").textContent = formatTime(event.timestamp);
+                        } else if (event.type === "chunk") {
+                            if (typingIndicator) {
+                                typingIndicator.remove();
+                                typingIndicator = null;
+                            }
+                            if (activeRole !== event.role) {
+                                activeBubble = appendBubble(event.role, "");
+                                activeRole = event.role;
+                            }
+                            const textDiv = activeBubble.querySelector(".bubble-text");
+                            textDiv.dataset.raw += event.text;
+                            if (event.role === "assistant") {
+                                textDiv.innerHTML = renderMarkdown(textDiv.dataset.raw);
+                            } else {
+                                textDiv.textContent = textDiv.dataset.raw;
+                            }
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                        } else if (event.type === "done") {
+                            if (activeBubble) {
+                                activeBubble.querySelector(".time-pill").textContent = formatTime(event.timestamp);
+                            }
+                            activeBubble = null;
+                            activeRole = null;
+                        }
+                    }
+                }
+            } catch (err) {
+                appendBubble("error", `Failed to send message: ${err.message}`, Date.now() / 1000);
+            } finally {
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+                sendBtn.disabled = false;
+            }
+        }
+
+        document.getElementById("send-btn").addEventListener("click", sendMessage);
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        loadMessages();
+    </script>
+</body>
+</html>

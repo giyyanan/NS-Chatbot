@@ -1,0 +1,17 @@
+# Registers the Ollama model used by faq_chatbot.hocon.
+# neuro-san requires every llm_config.model_name to have a catalog entry;
+# this model isn't in the built-in default_llm_info.hocon.
+{
+    "gpt-oss:20b-cloud": {
+        "class": "ollama",
+        "model_info_url": "https://ollama.com/library/gpt-oss",
+        "modalities": {
+            "input": [ "text" ],
+            "output": [ "text" ],
+        },
+        "capabilities": [ "tools" ],
+        "context_window_size": 131072,
+        "max_output_tokens": 32768,
+        "knowledge_cutoff": "unknown",
+    },
+}

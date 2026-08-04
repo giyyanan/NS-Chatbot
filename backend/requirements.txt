@@ -1,0 +1,9 @@
+neuro-san>=0.6.89
+fastapi>=0.141.1
+uvicorn[standard]>=0.52.1
+pydantic>=2.13.4
+python-dotenv>=1.2.2
+PyYAML>=6.0.3
+numpy>=2.5.1
+ollama>=0.6.2
+langchain-ollama

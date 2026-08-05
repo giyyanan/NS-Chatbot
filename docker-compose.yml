@@ -34,7 +34,7 @@ services:
     environment:
       # Defaults to the local qwen2.5:7b fallback -- zero-config, no
       # signup/API key needed. To opt into Ollama Cloud instead, set
-      # OLLAMA_API_KEY above and OLLAMA_MODEL=gpt-oss:20b-cloud (the
+      # OLLAMA_API_KEY above and OLLAMA_MODEL=gpt-oss:120b-cloud (the
       # default model in faq_chatbot.hocon) in a local `.env` file -- see
       # .env.example and the comments in backend/agent_network/faq_llm_info.hocon.
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}

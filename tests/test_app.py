@@ -1,6 +1,8 @@
 """
-API-level tests for the neuro-san-backed FAQ chatbot backend.
-
+API-level tests for the neuro-san-backed FAQ chatbot backend, against a
+FakeSession standing in for the real agent network -- these test app.py's
+own request handling (streaming, guardrail wiring, error-role detection),
+never real LLM output. They never touch Ollama.
 """
 
 import json

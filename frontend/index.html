@@ -129,46 +129,6 @@
         const chatWindow = document.getElementById("chat-window");
         const input = document.getElementById("input");
 
-        /* Multi-chat support (commented out: spec only calls for a single chat interface)
-        const historyList = document.getElementById("history-list");
-        let currentChatId = null;
-
-        async function loadChats() {
-            const res = await fetch("/chats");
-            const chats = await res.json();
-
-            historyList.innerHTML = chats
-                .map(c => `
-                    <a href="#" data-id="${c.id}"
-                       class="list-group-item list-group-item-action text-truncate ${c.id === currentChatId ? "active-chat" : ""}">
-                        ${c.title}
-                    </a>
-                `)
-                .join("");
-
-            historyList.querySelectorAll("a").forEach(a => {
-                a.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    switchChat(Number(a.dataset.id));
-                });
-            });
-
-            return chats;
-        }
-
-        async function switchChat(chatId) {
-            currentChatId = chatId;
-            await loadChats();
-            await loadMessages();
-        }
-
-        async function createChat() {
-            const res = await fetch("/chats", { method: "POST" });
-            const chat = await res.json();
-            await switchChat(chat.id);
-        }
-        */
-
         function escapeHtml(text) {
             return text
                 .replace(/&/g, "&amp;")

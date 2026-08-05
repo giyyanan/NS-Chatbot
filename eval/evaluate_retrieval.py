@@ -36,6 +36,13 @@ def render_report(y_true, y_pred, embed_latencies, search_latencies) -> str:
     total_avg = e_avg + s_avg
     accuracy = sum(1 for t, p in zip(y_true, y_pred) if t == p) / len(y_true)
 
+    per_category = {
+        cat: metrics for cat, metrics in report_dict.items()
+        if cat not in ("accuracy", "macro avg", "weighted avg")
+    }
+    best_cat = max(per_category, key=lambda c: per_category[c]["f1-score"])
+    worst_cat = min(per_category, key=lambda c: per_category[c]["f1-score"])
+
     lines = []
     lines.append("# FAQ Retrieval Evaluation Report")
     lines.append("")
@@ -44,6 +51,22 @@ def render_report(y_true, y_pred, embed_latencies, search_latencies) -> str:
     lines.append(f"top_k: {RETRIEVAL_TOP_K}  |  min_score: 0.55")
     lines.append("")
     lines.append(f"**Overall accuracy: {accuracy:.1%}**")
+    lines.append("")
+    lines.append("## TL;DR")
+    lines.append("")
+    lines.append(
+        f"- Out of {len(y_true)} questions, retrieval put the right FAQ category on top "
+        f"**{accuracy:.0%}** of the time."
+    )
+    lines.append(
+        f"- Best category: **{best_cat}** (F1 {per_category[best_cat]['f1-score']:.2f}). "
+        f"Worst: **{worst_cat}** (F1 {per_category[worst_cat]['f1-score']:.2f}) — "
+        "questions in that category are the most likely to get mis-grounded or missed."
+    )
+    lines.append(
+        f"- Each search takes ~{total_avg * 1000:.0f}ms, almost all of it "
+        f"({e_avg / total_avg:.0%}) waiting on the Ollama embedding call, not the search itself."
+    )
     lines.append("")
     lines.append("## Precision / Recall by category")
     lines.append("")

@@ -82,6 +82,66 @@ def groundedness(answer: str, reference: str) -> float:
     return len(ref_tokens & ans_tokens) / len(ref_tokens)
 
 
+DECLINE_PHRASES = (
+    "i'm sorry", "i am sorry", "i don't have", "i do not have",
+    "i couldn't find", "i could not find", "i don't know", "i do not know",
+    "not aware of", "reach out", "reaching out", "get in touch",
+    "contact our", "contact customer", "recommend contacting",
+    "customer support team", "live agent", "human agent", "support team",
+    "best next step", "connect you to", "connect you with",
+    "faq entry", "faq resources",
+)
+
+
+def declined(answer: str) -> bool:
+    """Heuristic: did the model punt to a human/support channel instead of
+    answering, rather than making something up? Keyword-based -- not
+    perfect, but the model's refusal phrasing is consistent enough in
+    practice for a quick signal.
+
+    Model output routinely uses smart/curly quotes ("don't" as U+2019, not
+    a plain apostrophe) -- normalize those before matching, or every
+    apostrophe-containing phrase above silently never matches.
+    """
+    lowered = answer.lower().replace("’", "'").replace("‘", "'")
+    return any(phrase in lowered for phrase in DECLINE_PHRASES)
+
+
+def verdict(answer: str, reference: str, score: float) -> str:
+    """One human-readable verdict per answer, combining decline-detection
+    with the groundedness score. Designed so an honest "I don't know" on an
+    ungrounded question scores as correct, not as a failure -- the raw
+    groundedness score alone would penalize it.
+    """
+    has_reference = bool(reference)
+    is_decline = declined(answer)
+
+    if not has_reference:
+        return "Honest (declined)" if is_decline else "Hallucinated (answered anyway)"
+    if is_decline:
+        return "Over-cautious (declined, but a real answer existed)"
+    if score >= 0.4:
+        return "Grounded"
+    if score >= 0.15:
+        return "Partial"
+    return "Weak/wrong"
+
+
+VERDICT_ICONS = {
+    "Honest (declined)": "✅",
+    "Grounded": "✅",
+    "Partial": "⚠️",
+    "Over-cautious (declined, but a real answer existed)": "⚠️",
+    "Weak/wrong": "❌",
+    "Hallucinated (answered anyway)": "❌",
+}
+
+
+def truncate(text: str, limit: int = 70) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
 def sample_questions() -> List[Dict]:
     with open(EVAL_PATH, encoding="utf-8") as handle:
         data = json.load(handle)
@@ -115,39 +175,93 @@ def baseline_answer(llm: ChatOllama, question: str) -> str:
 
 
 def render_report(rows: List[Dict]) -> str:
-    agent_scores = [row["agent_grounded"] for row in rows]
-    baseline_scores = [row["baseline_grounded"] for row in rows]
+    for row in rows:
+        row["agent_verdict"] = verdict(row["agent_answer"], row["reference"], row["agent_grounded"])
+        row["baseline_verdict"] = verdict(row["baseline_answer"], row["reference"], row["baseline_grounded"])
+
+    n = len(rows)
+    has_ref_rows = [r for r in rows if r["reference"]]
+    no_ref_rows = [r for r in rows if not r["reference"]]
+    agent_good = sum(1 for r in rows if VERDICT_ICONS[r["agent_verdict"]] == "✅")
+    baseline_good = sum(1 for r in rows if VERDICT_ICONS[r["baseline_verdict"]] == "✅")
+    agent_avg_time = sum(r["agent_seconds"] for r in rows) / n
+    baseline_avg_time = sum(r["baseline_seconds"] for r in rows) / n
+
     lines = []
     lines.append("# Agent Network vs. Bare LLM — Comparison Report")
     lines.append("")
-    lines.append(f"Model: `{MODEL}` (same model both paths, only agent-vs-no-agent varies)")
-    lines.append(f"Questions compared: {len(rows)}")
+    lines.append(f"Model: `{MODEL}` (same model both paths — only agent-vs-no-agent varies)")
+    lines.append(f"Questions compared: {n} ({len(has_ref_rows)} had a real FAQ match, "
+                  f"{len(no_ref_rows)} didn't — nothing in the dataset covers them)")
     lines.append("")
+    lines.append("## TL;DR")
+    lines.append("")
+    lines.append(f"- **Agent: {agent_good}/{n} good outcomes ✅ — Baseline: {baseline_good}/{n} ✅**")
+    if no_ref_rows:
+        agent_declined = sum(1 for r in no_ref_rows if declined(r["agent_answer"]))
+        baseline_declined = sum(1 for r in no_ref_rows if declined(r["baseline_answer"]))
+        lines.append(
+            f"- On the {len(no_ref_rows)} questions with **no real answer in the FAQ data**, "
+            f"the agent honestly said so **{agent_declined}/{len(no_ref_rows)}** times; the "
+            f"baseline did **{baseline_declined}/{len(no_ref_rows)}** times — the rest of the "
+            "time it invented a plausible-sounding answer with no basis in this bank's actual "
+            "policies (fake phone numbers, fake fees, fake limits)."
+        )
+    if has_ref_rows:
+        agent_grounded_n = sum(1 for r in has_ref_rows if r["agent_verdict"] == "Grounded")
+        baseline_grounded_n = sum(1 for r in has_ref_rows if r["baseline_verdict"] == "Grounded")
+        lines.append(
+            f"- On the {len(has_ref_rows)} questions the FAQ **does** cover, the agent's answer "
+            f"was clearly grounded in the real policy **{agent_grounded_n}/{len(has_ref_rows)}** "
+            f"times vs. the baseline's **{baseline_grounded_n}/{len(has_ref_rows)}**."
+        )
     lines.append(
-        f"**Avg groundedness — agent: {sum(agent_scores) / len(agent_scores):.1%}"
-        f"  |  baseline: {sum(baseline_scores) / len(baseline_scores):.1%}**"
+        f"- Agent averaged **{agent_avg_time:.1f}s** per answer; baseline averaged "
+        f"**{baseline_avg_time:.1f}s** — the agent's answers are also shorter and less padded."
     )
     lines.append("")
     lines.append(
-        "(\"Groundedness\" = fraction of the real FAQ answer's content words "
-        "that show up in the model's response -- a rough proxy, not a "
-        "correctness judgement. Read the side-by-side answers below for the "
-        "real picture.)"
+        "Verdict legend: ✅ correct behavior (grounded answer, or an honest decline when "
+        "nothing in the FAQ applies) · ⚠️ borderline · ❌ wrong (hallucinated, or declined "
+        "when a real answer existed)."
     )
+    lines.append("")
+    lines.append("## Summary")
+    lines.append("")
+    lines.append("| # | Category | Question | Agent | Baseline |")
+    lines.append("|---|---|---|---|---|")
+    for i, row in enumerate(rows, 1):
+        a_icon = VERDICT_ICONS[row["agent_verdict"]]
+        b_icon = VERDICT_ICONS[row["baseline_verdict"]]
+        lines.append(
+            f"| {i} | {row['category']} | {truncate(row['question'], 55)} "
+            f"| {a_icon} {row['agent_verdict']} ({row['agent_seconds']:.0f}s) "
+            f"| {b_icon} {row['baseline_verdict']} ({row['baseline_seconds']:.0f}s) |"
+        )
+    lines.append("")
+    lines.append(
+        "*(\"Grounded\"/\"Partial\"/\"Weak\" come from a crude content-word-overlap score "
+        "against the real FAQ answer — a rough proxy, not a correctness judgement. Read the "
+        "full answers below for the real picture on any row that looks surprising.)*"
+    )
+    lines.append("")
+    lines.append("## Full answers")
     lines.append("")
     for i, row in enumerate(rows, 1):
-        lines.append(f"## {i}. [{row['category']}] {row['question']}")
+        lines.append(f"### {i}. [{row['category']}] {row['question']}")
         lines.append("")
         lines.append(f"**Real FAQ answer (reference):** {row['reference'] or '(no match found)'}")
         lines.append("")
         lines.append(
-            f"**Agent (grounded {row['agent_grounded']:.0%}, "
-            f"{row['agent_seconds']:.1f}s):** {row['agent_answer']}"
+            f"**Agent — {VERDICT_ICONS[row['agent_verdict']]} {row['agent_verdict']} "
+            f"({row['agent_grounded']:.0%} grounded, {row['agent_seconds']:.1f}s):** "
+            f"{row['agent_answer']}"
         )
         lines.append("")
         lines.append(
-            f"**Baseline (grounded {row['baseline_grounded']:.0%}, "
-            f"{row['baseline_seconds']:.1f}s):** {row['baseline_answer']}"
+            f"**Baseline — {VERDICT_ICONS[row['baseline_verdict']]} {row['baseline_verdict']} "
+            f"({row['baseline_grounded']:.0%} grounded, {row['baseline_seconds']:.1f}s):** "
+            f"{row['baseline_answer']}"
         )
         lines.append("")
     return "\n".join(lines)

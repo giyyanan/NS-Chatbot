@@ -28,7 +28,7 @@ jobs:
   docker:
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 
@@ -63,14 +63,14 @@ jobs:
           fi
 
       - name: Log in to DockerHub
-        if: steps.dockerfile_check.outputs.present == 'true' && steps.secrets_check.outputs.configured == 'true'
+        if: steps.dockerfile_check.outputs.present == 'true' && steps.secrets_check.outputs.configured == 'true' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Tag and push Docker image
-        if: steps.dockerfile_check.outputs.present == 'true' && steps.secrets_check.outputs.configured == 'true'
+        if: steps.dockerfile_check.outputs.present == 'true' && steps.secrets_check.outputs.configured == 'true' && github.ref == 'refs/heads/main'
         env:
           DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
         run: |
@@ -85,3 +85,7 @@ jobs:
       - name: Skip push (DockerHub secrets not configured)
         if: steps.dockerfile_check.outputs.present == 'true' && steps.secrets_check.outputs.configured != 'true'
         run: echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set — built the image but skipped pushing."
+
+      - name: Skip push (not main)
+        if: steps.dockerfile_check.outputs.present == 'true' && steps.secrets_check.outputs.configured == 'true' && github.ref != 'refs/heads/main'
+        run: echo "Not on main — built the image to validate it, but skipped pushing to DockerHub."

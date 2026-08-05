@@ -11,7 +11,7 @@ from faq_retriever import RETRIEVAL_TOP_K, retrieve_with_timing  # noqa: E402  p
 
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 EVAL_PATH = os.path.join(EVAL_DIR, "eval_questions.json")
-RESULTS_DIR = os.path.join(EVAL_DIR, "eval_results")
+RESULTS_DIR = os.path.join(EVAL_DIR, "reports")
 REPORT_PATH = os.path.join(RESULTS_DIR, "retrieval_report.md")
 
 

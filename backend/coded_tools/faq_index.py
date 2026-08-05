@@ -1,6 +1,8 @@
 """
-Discovers FAQ entries from any CSV/JSON file in data/ and maintains an
-embedding cache over them, auto-rebuilt whenever data/ contents change.
+Discovers FAQ entries from any CSV/JSON file in data/ and loads the
+pre-built embedding cache over them (see build_embeddings() /
+eval/scratch_build_embeddings.py -- the cache is built offline, not
+regenerated automatically at app startup).
 """
 
 from typing import Any
@@ -10,7 +12,6 @@ from typing import Optional
 from typing import Tuple
 
 import csv
-import hashlib
 import json
 import os
 
@@ -22,7 +23,6 @@ EMBEDDING_MODEL = "embeddinggemma"
 OLLAMA_HOST = os.getenv("OLLAMA_EMBED_HOST", "http://127.0.0.1:11434")
 CACHE_PREFIX = f"faq_embeddings_{EMBEDDING_MODEL}"
 CACHE_PATH = os.path.join(DATA_DIR, f"{CACHE_PREFIX}.npy")
-META_PATH = os.path.join(DATA_DIR, f"{CACHE_PREFIX}.meta.json")
 
 _client = ollama.Client(host=OLLAMA_HOST)
 
@@ -106,64 +106,48 @@ def discover_entries() -> List[Dict[str, str]]:
     return entries
 
 
-def _data_manifest_hash() -> str:
-    fingerprints = []
-    for name in sorted(os.listdir(DATA_DIR)):
-        if name.startswith(CACHE_PREFIX):
-            continue
-        if not (name.lower().endswith(".csv") or name.lower().endswith(".json")):
-            continue
-        path = os.path.join(DATA_DIR, name)
-        stat = os.stat(path)
-        fingerprints.append(f"{name}:{stat.st_mtime_ns}:{stat.st_size}")
-
-    digest_input = EMBEDDING_MODEL + "|" + "|".join(fingerprints)
-    return hashlib.sha256(digest_input.encode("utf-8")).hexdigest()
-
-
-def _embed_entries(entries: List[Dict[str, str]]) -> np.ndarray:
+def build_embeddings(entries: List[Dict[str, str]]) -> np.ndarray:
+    """
+    Embeds every FAQ entry via Ollama and writes the result to CACHE_PATH.
+    Offline/manual step, not called at app startup -- see
+    eval/scratch_build_embeddings.py. Re-run that script after changing
+    data/'s contents.
+    """
     vectors = []
     for entry in entries:
         text = f"{entry['question']}\n{entry['answer']}"
         response = _client.embed(model=EMBEDDING_MODEL, input=text)
         vectors.append(response["embeddings"][0])
-    return np.array(vectors, dtype=np.float32)
-
-
-def _load_cache_meta() -> Optional[Dict[str, Any]]:
-    if not os.path.exists(META_PATH):
-        return None
-    with open(META_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    matrix = np.array(vectors, dtype=np.float32)
+    np.save(CACHE_PATH, matrix)
+    return matrix
 
 
 def ensure_embeddings() -> Tuple[List[Dict[str, str]], np.ndarray]:
     """
     Returns (entries, normalized_embedding_matrix) for whatever FAQ files are
-    currently in data/, rebuilding the embedding cache if data/ has changed
-    (or the cache doesn't exist yet) since the cache was last built.
+    currently in data/. Assumes the embedding cache at CACHE_PATH has
+    already been built -- run `python eval/scratch_build_embeddings.py`
+    after changing data/'s contents. Keeps app startup simple and fast,
+    with no live Ollama call needed just to boot.
     """
     entries = discover_entries()
     if not entries:
         return entries, np.zeros((0, 0), dtype=np.float32)
 
-    manifest_hash = _data_manifest_hash()
+    if not os.path.exists(CACHE_PATH):
+        raise RuntimeError(
+            f"No embedding cache at {CACHE_PATH}. Run "
+            "`python eval/scratch_build_embeddings.py` first."
+        )
 
-    meta = _load_cache_meta()
-    cache_valid = (
-        meta is not None
-        and meta.get("manifest_hash") == manifest_hash
-        and meta.get("count") == len(entries)
-        and os.path.exists(CACHE_PATH)
-    )
-
-    if cache_valid:
-        matrix = np.load(CACHE_PATH)
-    else:
-        matrix = _embed_entries(entries)
-        np.save(CACHE_PATH, matrix)
-        with open(META_PATH, "w", encoding="utf-8") as f:
-            json.dump({"manifest_hash": manifest_hash, "count": len(entries), "model": EMBEDDING_MODEL}, f)
+    matrix = np.load(CACHE_PATH)
+    if matrix.shape[0] != len(entries):
+        raise RuntimeError(
+            f"Embedding cache at {CACHE_PATH} has {matrix.shape[0]} vectors "
+            f"but data/ currently has {len(entries)} FAQ entries -- rebuild "
+            "with `python eval/scratch_build_embeddings.py`."
+        )
 
     normed_matrix = matrix / np.linalg.norm(matrix, axis=1, keepdims=True)
     return entries, normed_matrix

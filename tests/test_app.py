@@ -15,7 +15,10 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
 
-import app as app_module  
+import app as app_module
+
+from neuro_san.client.direct_agent_session_factory import DirectAgentSessionFactory
+from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 
 
 class FakeSession:
@@ -208,3 +211,30 @@ def test_chat_injection_takes_precedence_over_pii(client):
     chunk_events = [e for e in events if e["type"] == "chunk"]
     assert chunk_events[0]["role"] == "error"
     assert "override my instructions" in chunk_events[0]["text"]
+
+
+def test_llm_responds_to_a_real_question():
+    """
+    One live sanity check against the real agent network + real Ollama
+    daemon -- everything else in this file uses FakeSession and never
+    touches Ollama. Skipped rather than failed if no live daemon is
+    reachable (e.g. in CI).
+    """
+    try:
+        factory = DirectAgentSessionFactory()
+        session = factory.create_session(app_module.AGENT_NETWORK_FILE)
+
+        input_processor = StreamingInputProcessor(session=session)
+        input_processor.reset()
+        chat_request = input_processor.formulate_chat_request(
+            "What are your customer support hours?", sly_data=None, chat_context=None
+        )
+        message_processor = input_processor.get_message_processor()
+        for chat_response in session.streaming_chat(chat_request):
+            message_processor.process_message(chat_response.get("response", {}))
+    except Exception as exc:  # pylint: disable=broad-except
+        pytest.skip(f"No live Ollama/agent network reachable: {exc}")
+
+    answer = message_processor.get_compiled_answer() or ""
+    assert answer, "agent returned no answer at all"
+    assert not answer.startswith("Error from"), f"agent returned an error: {answer}"

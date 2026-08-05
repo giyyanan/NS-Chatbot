@@ -1,7 +1,8 @@
 """
-Manually (re)builds the FAQ embedding cache from whatever files are in
-data/. The backend also does this automatically at startup when data/ has
-changed, so this script is only needed to pre-warm the cache ahead of time.
+(Re)builds the FAQ embedding cache from whatever files are in data/. Run
+this after changing data/'s contents -- the backend assumes the cache
+already exists and doesn't rebuild it automatically at startup (see
+faq_index.ensure_embeddings()).
 """
 
 import os
@@ -13,7 +14,8 @@ import faq_index
 
 
 def build() -> None:
-    entries, _ = faq_index.ensure_embeddings()
+    entries = faq_index.discover_entries()
+    faq_index.build_embeddings(entries)
     print(f"Indexed {len(entries)} FAQ entries into {faq_index.CACHE_PATH}")
 
 

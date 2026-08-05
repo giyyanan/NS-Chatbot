@@ -76,6 +76,25 @@ are relative to the repo root / their own file location, so this works from
 a fresh clone regardless of where the repo lives on disk — just launch
 `uvicorn` from the repo root as shown above.
 
+### Run with Docker instead
+
+```bash
+docker compose up
+```
+
+No Ollama install, `ollama pull`, or credentials needed — the stack brings
+up its own `ollama` daemon, pulls `embeddinggemma` (retrieval) and
+`qwen2.5:7b` (chat, a local fallback for the cloud model below) into it, and
+then starts the app on **http://localhost:8000/**. Everything runs offline.
+
+To use the cloud model (`gpt-oss:20b-cloud`, the default in
+`faq_chatbot.hocon`) instead of the local fallback, copy `.env.example` to
+`.env` and set `OLLAMA_API_KEY` (from https://ollama.com → Settings → API
+keys) and `OLLAMA_MODEL=gpt-oss:20b-cloud` — this authenticates the
+containerized Ollama daemon non-interactively, since the usual
+`ollama signin` device-code flow can't run headless. `.env` is gitignored;
+never commit real keys.
+
 ## How it works
 
 - **Dataset**: any `.csv` or `.json` file in `data/` with question/answer

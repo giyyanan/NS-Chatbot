@@ -25,8 +25,14 @@
 
     "llm_info_file": "backend/agent_network/faq_llm_info.hocon",
     "llm_config": {
+        # Defaults to the Ollama Cloud model (needs `ollama signin` once on
+        # the host running the daemon); set OLLAMA_MODEL to override, e.g.
+        # to the local "qwen2.5:7b" fallback registered in
+        # faq_llm_info.hocon, which needs no signin or API key at all.
         "model_name": "gpt-oss:20b-cloud",
-        "base_url": "http://localhost:11434"
+        "model_name": ${?OLLAMA_MODEL},
+        "base_url": "http://localhost:11434",
+        "base_url": ${?OLLAMA_BASE_URL}
     },
 
     # Ollama Cloud calls go over the network; give it a generous timeout.

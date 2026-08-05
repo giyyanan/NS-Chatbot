@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.git/
+.github/
+tests/
+eval/
+.claude/
+TODO.md
+README.md
+LICENSE

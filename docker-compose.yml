@@ -1,0 +1,52 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      # Optional -- leave unset (the default) to run fully offline against
+      # the local qwen2.5:7b model, no signup or key needed. Set this in a
+      # local `.env` file (see .env.example) to authenticate this daemon
+      # against Ollama Cloud non-interactively instead of `ollama signin`,
+      # which can't run inside a headless container.
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # One-shot: pulls the models the app needs, then exits. `app` waits on it.
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull embeddinggemma && ollama pull qwen2.5:7b"]
+    restart: "no"
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Defaults to the local qwen2.5:7b fallback -- zero-config, no
+      # signup/API key needed. To opt into Ollama Cloud instead, set
+      # OLLAMA_API_KEY above and OLLAMA_MODEL=gpt-oss:20b-cloud (the
+      # default model in faq_chatbot.hocon) in a local `.env` file -- see
+      # .env.example and the comments in backend/agent_network/faq_llm_info.hocon.
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_EMBED_HOST=http://ollama:11434
+    volumes:
+      # Bind-mount so the embedding cache survives container recreation
+      # instead of being rebuilt (needs a live Ollama call) every restart.
+      - ./data:/app/data
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+
+volumes:
+  ollama_data:

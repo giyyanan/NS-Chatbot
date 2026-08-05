@@ -36,13 +36,13 @@ os.environ["AGENT_TOOL_PATH"] = CODED_TOOLS_DIR
 if CODED_TOOLS_DIR not in sys.path:
     sys.path.insert(0, CODED_TOOLS_DIR)
 
-from langchain_core.messages import HumanMessage  # noqa: E402  pylint: disable=wrong-import-position
-from langchain_ollama import ChatOllama  # noqa: E402  pylint: disable=wrong-import-position
+from langchain_core.messages import HumanMessage
+from langchain_ollama import ChatOllama
 
-from neuro_san.client.direct_agent_session_factory import DirectAgentSessionFactory  # noqa: E402  pylint: disable=wrong-import-position
-from neuro_san.client.streaming_input_processor import StreamingInputProcessor  # noqa: E402  pylint: disable=wrong-import-position
+from neuro_san.client.direct_agent_session_factory import DirectAgentSessionFactory
+from neuro_san.client.streaming_input_processor import StreamingInputProcessor
 
-from faq_retriever import retrieve_with_timing  # noqa: E402  pylint: disable=wrong-import-position
+from faq_retriever import retrieve_with_timing
 
 MODEL = os.environ.get("OLLAMA_MODEL", "gpt-oss:20b-cloud")
 BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")

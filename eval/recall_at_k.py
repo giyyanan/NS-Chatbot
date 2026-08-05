@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend", "coded_tools"))
 
-import faq_retriever as fr  # noqa: E402  pylint: disable=wrong-import-position
+import faq_retriever as fr
 
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 EVAL_PATH = os.path.join(EVAL_DIR, "eval_questions.json")

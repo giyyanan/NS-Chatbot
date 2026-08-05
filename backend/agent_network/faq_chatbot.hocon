@@ -1,20 +1,18 @@
 # Bank FAQ customer-support chatbot agent network.
 #
 # Single front-man agent grounded in the FAQ dataset(s) found in data/ via the
-# faq_search CodedTool (semantic/embeddings retrieval -- see
-# ../coded_tools/faq_retriever.py and ../coded_tools/faq_index.py).
+# faq_search CodedTool - semantic/embeddings retrieval 
+#
 # Multi-turn conversation is handled by the neuro-san session layer
 # (chat_context is threaded through by the caller between turns); no
 # special agent-side state is needed here.
 #
 # LLM runs through a local Ollama daemon signed in via `ollama signin`,
 # which proxies the "-cloud" model to Ollama's hosted API (see
-# faq_llm_info.hocon) -- same model neuroSAN used as a standalone script,
-# now driven through a neuro-san agent network instead of a hand-rolled
-# ollama.chat() call.
+# faq_llm_info.hocon)
 {
     "metadata": {
-        "description": "Answers bank customer-support questions from a static FAQ dataset (accounts, cards, loans, insurance, fund transfers, investments, security).",
+        "description": "Answers bank customer support questions from a static FAQ dataset (accounts, cards, loans, insurance, fund transfers, investments, security).",
         "tags": ["example", "faq", "customer-support", "ollama", "banking"],
         "sample_queries": [
             "What happens if my card is lost?",
@@ -25,17 +23,13 @@
 
     "llm_info_file": "backend/agent_network/faq_llm_info.hocon",
     "llm_config": {
-        # Defaults to the Ollama Cloud model (needs `ollama signin` once on
-        # the host running the daemon); set OLLAMA_MODEL to override, e.g.
-        # to the local "qwen2.5:7b" fallback registered in
-        # faq_llm_info.hocon, which needs no signin or API key at all.
         "model_name": "gpt-oss:120b-cloud",
         "model_name": ${?OLLAMA_MODEL},
         "base_url": "http://localhost:11434",
         "base_url": ${?OLLAMA_BASE_URL}
     },
 
-    # Ollama Cloud calls go over the network; give it a generous timeout.
+    # Ollama Cloud calls goes over the network; give it a generous timeout.
     "max_execution_seconds": 300,
 
     "tools": [

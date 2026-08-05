@@ -55,9 +55,8 @@ def detect_injection(text: str) -> bool:
     text_lower = text.lower()
     return any(re.search(pattern, text_lower) for pattern in INJECTION_PATTERNS)
 
-#Error messages for any deviation from guardrails
+#Checks injection and pii guards and decides whether to allow the message, redacts pii even when allowed, returns allowed, processed_text, block_reason
 def apply_input_guards(text: str) -> tuple[bool, str, str | None]:
-    """Returns (allowed, processed_text, block_reason)."""
     guards = CONFIG["input_guards"]
 
     injection_guard = guards.get("injection_detector", {})
@@ -81,7 +80,7 @@ def apply_input_guards(text: str) -> tuple[bool, str, str | None]:
 
     return True, text, None
 
-#Output guardrails if enabled
+#Output guardrails if enabled, redacts all pii types regardless of which patterns are configured on the input side
 def apply_output_guards(text: str) -> str:
     guards = CONFIG["output_guards"]
     pii_guard = guards.get("pii_scanner", {})

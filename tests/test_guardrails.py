@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
 
-import guardrails  # noqa: E402  pylint: disable=wrong-import-position
+import guardrails
 
 
 ALL_PII_TYPES = list(guardrails.PII_PATTERNS.keys())

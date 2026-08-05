@@ -1,7 +1,8 @@
 """
 Discovers FAQ entries from any CSV/JSON file in data/ and loads the
 pre-built embedding cache over them (see build_embeddings() /
-eval/scratch_build_embeddings.py -- the cache is built offline, not
+eval/scratch_build_embeddings.py 
+The cache is built offline, not
 regenerated automatically at app startup).
 """
 
@@ -32,6 +33,7 @@ CATEGORY_KEYS = ["category", "categories", "class", "topic", "tag", "tags", "sec
 LIST_KEYS = ["faqs", "data", "items", "entries", "records"]
 
 
+#matches a column name against a list of accepted aliases, case insensitive
 def _match_key(available: List[str], candidates: List[str]) -> Optional[str]:
     lowered = {key.lower(): key for key in available}
     for candidate in candidates:
@@ -40,11 +42,13 @@ def _match_key(available: List[str], candidates: List[str]) -> Optional[str]:
     return None
 
 
+#reads rows from a csv file
 def _rows_from_csv(path: str) -> List[Dict[str, Any]]:
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
+#reads rows from a json file, handles both a plain list and a dict wrapped list
 def _rows_from_json(path: str) -> List[Dict[str, Any]]:
     with open(path, encoding="utf-8") as f:
         payload = json.load(f)
@@ -60,6 +64,7 @@ def _rows_from_json(path: str) -> List[Dict[str, Any]]:
     return []
 
 
+#normalizes raw rows into question/answer/category entries
 def _extract_entries(rows: List[Dict[str, Any]], source: str) -> List[Dict[str, str]]:
     if not rows:
         return []
@@ -90,8 +95,8 @@ def _extract_entries(rows: List[Dict[str, Any]], source: str) -> List[Dict[str, 
     return entries
 
 
+#scans data/ for csv and json faq files and returns their combined entries
 def discover_entries() -> List[Dict[str, str]]:
-    """Scans data/ for .csv and .json FAQ files and returns their combined entries."""
     entries: List[Dict[str, str]] = []
     for name in sorted(os.listdir(DATA_DIR)):
         if name.startswith(CACHE_PREFIX):
@@ -106,13 +111,8 @@ def discover_entries() -> List[Dict[str, str]]:
     return entries
 
 
+#embeds every faq entry via ollama and writes it to the cache, offline step only, not called at app startup
 def build_embeddings(entries: List[Dict[str, str]]) -> np.ndarray:
-    """
-    Embeds every FAQ entry via Ollama and writes the result to CACHE_PATH.
-    Offline/manual step, not called at app startup -- see
-    eval/scratch_build_embeddings.py. Re-run that script after changing
-    data/'s contents.
-    """
     vectors = []
     for entry in entries:
         text = f"{entry['question']}\n{entry['answer']}"
@@ -123,14 +123,8 @@ def build_embeddings(entries: List[Dict[str, str]]) -> np.ndarray:
     return matrix
 
 
+#loads the pre built embedding cache for the current faq entries, raises if it's missing or out of sync
 def ensure_embeddings() -> Tuple[List[Dict[str, str]], np.ndarray]:
-    """
-    Returns (entries, normalized_embedding_matrix) for whatever FAQ files are
-    currently in data/. Assumes the embedding cache at CACHE_PATH has
-    already been built -- run `python eval/scratch_build_embeddings.py`
-    after changing data/'s contents. Keeps app startup simple and fast,
-    with no live Ollama call needed just to boot.
-    """
     entries = discover_entries()
     if not entries:
         return entries, np.zeros((0, 0), dtype=np.float32)

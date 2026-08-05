@@ -29,11 +29,7 @@
     },
 
     # Local (non-cloud) fallback -- no `ollama signin` or API key needed,
-    # just `ollama pull qwen2.5:7b`. Used when OLLAMA_MODEL overrides the
-    # default in faq_chatbot.hocon (e.g. set by the Docker entrypoint).
-    # llama3.2:3b was tried first but proved unreliable at this agent
-    # network's tool-calling (faq_search) flow -- malformed/invalid
-    # arguments on 2 of 3 test queries.
+    # just `ollama pull qwen2.5:7b`.
     "qwen2.5:7b": {
         "class": "ollama",
         "model_info_url": "https://ollama.com/library/qwen2.5",

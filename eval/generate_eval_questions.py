@@ -51,7 +51,7 @@ def generate_batch(prompt: str, retries: int = 2):
         try:
             response = ollama.chat(model=MODEL, messages=[{"role": "user", "content": prompt}])
             return extract_json_array(response.message.content)
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:
             if attempt == retries:
                 print(f"    batch failed after {retries} retries: {e}")
                 return []

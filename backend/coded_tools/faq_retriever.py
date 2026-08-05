@@ -19,13 +19,9 @@ RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "10"))
 
 faqs, _normed_matrix = faq_index.ensure_embeddings()
 
-
+#serach method with timing calculations, basically used for evals
 def retrieve_with_timing(query: str, top_k: int = RETRIEVAL_TOP_K, min_score: float = 0.55):
-    """Same as retrieve(), but also returns a timing breakdown:
-    {"embed_seconds": ..., "search_seconds": ...} -- embed_seconds is the
-    Ollama embedding API call, search_seconds is the local numpy cosine
-    similarity search against the cached FAQ matrix.
-    """
+
     if not faqs:
         return [], {"embed_seconds": 0.0, "search_seconds": 0.0}
 
@@ -37,6 +33,7 @@ def retrieve_with_timing(query: str, top_k: int = RETRIEVAL_TOP_K, min_score: fl
     query_vector = np.array(response["embeddings"][0], dtype=np.float32)
     query_vector = query_vector / np.linalg.norm(query_vector)
 
+    # cosine mathing thorugh matrix multiplication
     scores = _normed_matrix @ query_vector
     ranked = np.argsort(-scores)[:top_k]
 
@@ -56,17 +53,34 @@ def retrieve_with_timing(query: str, top_k: int = RETRIEVAL_TOP_K, min_score: fl
 
     return results, {"embed_seconds": embed_seconds, "search_seconds": search_seconds}
 
-
+#Default method for fetching the search results with a min score of .55 for cosine search
 def retrieve(query: str, top_k: int = RETRIEVAL_TOP_K, min_score: float = 0.55):
-    results, _ = retrieve_with_timing(query, top_k=top_k, min_score=min_score)
+    if not faqs:
+        return []
+
+    response = faq_index._client.embed(model=faq_index.EMBEDDING_MODEL, input=query)
+    query_vector = np.array(response["embeddings"][0], dtype=np.float32)
+    query_vector = query_vector / np.linalg.norm(query_vector)
+
+    scores = _normed_matrix @ query_vector
+    ranked = np.argsort(-scores)[:top_k]
+
+    results = []
+    for i in ranked:
+        if scores[i] < min_score:
+            break
+        results.append(
+            {
+                "question": faqs[i]["question"],
+                "answer": faqs[i]["answer"],
+                "category": faqs[i]["category"],
+                "score": float(scores[i]),
+            }
+        )
     return results
 
-
+#implementation class for exposing the retrieve method in coded tools
 class FaqRetriever(CodedTool):
-    """
-    CodedTool implementation exposing retrieve() as the faq_search tool.
-    """
-
     def invoke(self, args: Dict[str, Any], sly_data: Dict[str, Any]) -> str:
         query = str(args.get("query", "")).strip()
         if not query:

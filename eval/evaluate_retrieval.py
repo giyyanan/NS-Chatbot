@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from sklearn.metrics import classification_report
 
-from faq_retriever import RETRIEVAL_TOP_K, retrieve_with_timing  # noqa: E402  pylint: disable=wrong-import-position
+from faq_retriever import RETRIEVAL_TOP_K, retrieve_with_timing
 
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 EVAL_PATH = os.path.join(EVAL_DIR, "eval_questions.json")

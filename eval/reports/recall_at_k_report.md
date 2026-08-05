@@ -1,6 +1,6 @@
 # FAQ Retrieval — Recall@k Report
 
-Generated: 2026-08-05T04:11:26+00:00
+Generated: 2026-08-05T11:32:23+00:00
 Questions evaluated: 2000  |  min_score: 0.55
 
 ## TL;DR

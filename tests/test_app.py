@@ -232,7 +232,7 @@ def test_llm_responds_to_a_real_question():
         message_processor = input_processor.get_message_processor()
         for chat_response in session.streaming_chat(chat_request):
             message_processor.process_message(chat_response.get("response", {}))
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:
         pytest.skip(f"No live Ollama/agent network reachable: {exc}")
 
     answer = message_processor.get_compiled_answer() or ""
